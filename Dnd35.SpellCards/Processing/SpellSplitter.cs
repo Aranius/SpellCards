@@ -389,14 +389,13 @@ public static class SpellSplitter
 
     private static string Normalize(string text)
     {
+        var tokens = text
+            .Replace("\r", "")
+            .Replace("\n", " ")
+            .Split(' ', StringSplitOptions.RemoveEmptyEntries);
+
         return string.Join(" ",
-            text
-                .Replace("\r", "")
-                .Replace("\n", " ")
-                .Replace("  ", " ")
-                .Split(' ')
-                .Where(w => w.Length > 1 || char.IsLetterOrDigit(w[0]))
-        ).Trim();
+            tokens.Where(w => w.Length > 1 || char.IsLetterOrDigit(w[0]))).Trim();
     }
 
     private static IReadOnlyList<string> TokenizeSentences(string text)

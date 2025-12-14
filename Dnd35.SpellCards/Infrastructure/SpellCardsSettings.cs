@@ -1,0 +1,30 @@
+using System.Text.Json;
+
+namespace Dnd35.SpellCards.Infrastructure;
+
+internal sealed record SpellCardsSettings
+{
+    public OllamaSettings Ollama { get; init; } = new();
+
+    public static SpellCardsSettings? Load(string path)
+    {
+        if (!File.Exists(path))
+            return null;
+
+        try
+        {
+            var json = File.ReadAllText(path);
+            return JsonSerializer.Deserialize<SpellCardsSettings>(json, new JsonSerializerOptions(JsonSerializerDefaults.Web));
+        }
+        catch
+        {
+            return null;
+        }
+    }
+}
+
+internal sealed record OllamaSettings
+{
+    public string? Model { get; init; }
+    public string? Endpoint { get; init; }
+}

@@ -1,0 +1,6 @@
+{
+  "ollama": {
+    "model": "mixtral:8x7b",
+    "endpoint": "http://127.0.0.1:11434"
+  }
+}

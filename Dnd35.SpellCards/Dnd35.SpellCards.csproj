@@ -21,6 +21,7 @@
 
 	<ItemGroup>
 		<None Update="requests.txt" CopyToOutputDirectory="PreserveNewest" />
+		<None Update="settings.json" CopyToOutputDirectory="PreserveNewest" />
 	</ItemGroup>
 
 	<ItemGroup>
