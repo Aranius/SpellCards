@@ -1,13 +1,10 @@
 ﻿using Dnd35.SpellCards.Infrastructure;
 using Dnd35.SpellCards.Models;
 using Dnd35.SpellCards.Rendering;
-using Dnd35.SpellCards.Requests;
 using Dnd35.SpellCards.Sources;
 using QuestPDF.Drawing;
 using QuestPDF.Fluent;
 using QuestPDF.Infrastructure;
-using YamlDotNet.Serialization;
-using YamlDotNet.Serialization.NamingConventions;
 
 FontManager.RegisterFont(
     File.OpenRead(Path.Combine(AppContext.BaseDirectory, "assets/fonts/Cinzel-SemiBold.ttf")));
@@ -23,7 +20,10 @@ QuestPDF.Settings.License = LicenseType.Community;
 var ct = CancellationToken.None;
 
 var baseDir = AppContext.BaseDirectory;
-var reqPath = Path.Combine(baseDir, "requests.yaml");
+var reqPath = Path.Combine(baseDir, "requests.txt");
+
+if (!File.Exists(reqPath))
+    throw new FileNotFoundException("requests.txt not found. Ensure it is copied next to the executable.", reqPath);
 
 Directory.CreateDirectory(Path.Combine(baseDir, "cache"));
 Directory.CreateDirectory(Path.Combine(baseDir, "out"));
@@ -49,11 +49,21 @@ Console.WriteLine($"Generated: {output}");
 
 static IReadOnlyList<SpellRequest> LoadRequests(string path)
 {
-    var deserializer = new DeserializerBuilder()
-        .WithNamingConvention(CamelCaseNamingConvention.Instance)
-        .Build();
+    var unique = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+    var list = new List<SpellRequest>();
 
-    var yaml = File.ReadAllText(path);
-    var root = deserializer.Deserialize<RequestFile>(yaml);
-    return root?.Spells ?? [];
+    foreach (var rawLine in File.ReadLines(path))
+    {
+        var line = rawLine.Split('#', 2)[0].Trim();
+        if (string.IsNullOrEmpty(line))
+            continue;
+
+        if (unique.Add(line))
+            list.Add(new SpellRequest { Name = line });
+    }
+
+    if (list.Count == 0)
+        throw new InvalidOperationException($"No spell names found in '{path}'. Add at least one name (one per line).");
+
+    return list;
 }

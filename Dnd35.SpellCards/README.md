@@ -1,7 +1,7 @@
 # D&D 3.5 Spell Cards (MTG size) PDF Generator
 
 ## Run
-- Edit `spells.yaml`
+- Edit `requests.txt`
 - Build & run:
 
 ```bash
