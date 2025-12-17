@@ -1,6 +1,4 @@
-﻿using Dnd35.SpellCards.Infrastructure;
-
-namespace Dnd35.SpellCards.Infrastructure;
+﻿namespace Dnd35.SpellCards.Infrastructure;
 
 public static class SpellNameResolver
 {

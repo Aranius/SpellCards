@@ -36,7 +36,7 @@ var cacheDir = Path.Combine(baseDir, "cache");
 Directory.CreateDirectory(cacheDir);
 Directory.CreateDirectory(Path.Combine(baseDir, "out"));
 
-var requests = LoadRequests(reqPath);
+var spellNames = LoadSpellNames(reqPath);
 
 using var http = new HttpClient();
 http.DefaultRequestHeaders.UserAgent.ParseAdd("Dnd35SpellCards/1.0 (personal use)");
@@ -44,7 +44,7 @@ http.DefaultRequestHeaders.UserAgent.ParseAdd("Dnd35SpellCards/1.0 (personal use
 var cache = new HttpCache(http, cacheDir);
 var source = new D20SrdSpellSource(cache);
 
-var spells = await source.FetchSpellsAsync(requests, ct);
+var spells = await source.FetchSpellsAsync(spellNames, ct);
 
 ISpellCondenser condenser = new NoOpSpellCondenser();
 OllamaSpellCondenser? ollama = null;
@@ -133,10 +133,10 @@ static async Task<IReadOnlyList<Spell>> PrepareSpellCardsAsync(IReadOnlyList<Spe
     return result;
 }
 
-static IReadOnlyList<SpellRequest> LoadRequests(string path)
+static IReadOnlyList<string> LoadSpellNames(string path)
 {
     var unique = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-    var list = new List<SpellRequest>();
+    var list = new List<string>();
 
     foreach (var rawLine in File.ReadLines(path))
     {
@@ -145,7 +145,7 @@ static IReadOnlyList<SpellRequest> LoadRequests(string path)
             continue;
 
         if (unique.Add(line))
-            list.Add(new SpellRequest { Name = line });
+            list.Add(line);
     }
 
     if (list.Count == 0)
