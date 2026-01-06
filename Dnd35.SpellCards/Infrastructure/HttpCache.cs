@@ -26,6 +26,25 @@ public sealed class HttpCache
         return html;
     }
 
+    public async Task<string> PostStringCachedAsync(string url, string jsonBody, CancellationToken ct)
+    {
+        var key = Sha1(url + "\n" + jsonBody);
+        var file = Path.Combine(_cacheDir, "post_" + key + ".json");
+
+        if (File.Exists(file))
+            return await File.ReadAllTextAsync(file, ct);
+
+        using var content = new StringContent(jsonBody, Encoding.UTF8, "application/json");
+        using var resp = await _http.PostAsync(url, content, ct).ConfigureAwait(false);
+
+        var body = await resp.Content.ReadAsStringAsync(ct).ConfigureAwait(false);
+        if (!resp.IsSuccessStatusCode)
+            throw new InvalidOperationException($"HTTP {(int)resp.StatusCode} for POST {url}: {body}");
+
+        await File.WriteAllTextAsync(file, body, ct).ConfigureAwait(false);
+        return body;
+    }
+
     private static string Sha1(string s)
     {
         using var sha1 = SHA1.Create();

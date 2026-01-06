@@ -7,120 +7,137 @@ using QuestPDF.Drawing;
 using QuestPDF.Fluent;
 using QuestPDF.Infrastructure;
 
-var commandLine = CommandLineOptions.Parse(args);
-var condenseDescriptions = !commandLine.NoCondense;
-
-FontManager.RegisterFont(
-    File.OpenRead(Path.Combine(AppContext.BaseDirectory, "assets/fonts/Cinzel-SemiBold.ttf")));
-
-FontManager.RegisterFont(
-    File.OpenRead(Path.Combine(AppContext.BaseDirectory, "assets/fonts/SourceSerif4-Regular.ttf")));
-
-FontManager.RegisterFont(
-    File.OpenRead(Path.Combine(AppContext.BaseDirectory, "assets/fonts/SourceSerif4-Semibold.ttf")));
-
-QuestPDF.Settings.License = LicenseType.Community;
-
-var ct = CancellationToken.None;
-
-var baseDir = AppContext.BaseDirectory;
-var reqPath = Path.Combine(baseDir, "requests.txt");
-
-if (!File.Exists(reqPath))
-    throw new FileNotFoundException("requests.txt not found. Ensure it is copied next to the executable.", reqPath);
-
-var settingsPath = Path.Combine(baseDir, "settings.json");
-var settings = SpellCardsSettings.Load(settingsPath);
-
-var cacheDir = Path.Combine(baseDir, "cache");
-Directory.CreateDirectory(cacheDir);
-Directory.CreateDirectory(Path.Combine(baseDir, "out"));
-
-var (ruleSet, spellNames) = LoadSpellRequests(reqPath);
-
-using var http = new HttpClient();
-http.DefaultRequestHeaders.UserAgent.ParseAdd("Dnd35SpellCards/1.0 (personal use)");
-
-var cache = new HttpCache(http, cacheDir);
-
-var spells = ruleSet == RuleSet.Dnd5e
-    ? await new Open5eSpellSource(cache).FetchSpellsAsync(spellNames, ct)
-    : await new D20SrdSpellSource(cache).FetchSpellsAsync(spellNames, ct);
-
-ISpellCondenser condenser = new NoOpSpellCondenser();
-OllamaSpellCondenser? ollama = null;
-OpenAiCompatibleSpellCondenser? llm = null;
-
-if (condenseDescriptions)
+try
 {
-    var llmModel = commandLine.LlmModel
-                   ?? settings?.Llm?.Model
-                   ?? Environment.GetEnvironmentVariable("SPELLCARDS_LLM_MODEL");
+    var commandLine = CommandLineOptions.Parse(args);
+    var condenseDescriptions = !commandLine.NoCondense;
 
-    var llmEndpoint = commandLine.LlmEndpoint
-                      ?? settings?.Llm?.Endpoint
-                      ?? Environment.GetEnvironmentVariable("SPELLCARDS_LLM_ENDPOINT");
+    FontManager.RegisterFont(
+        File.OpenRead(Path.Combine(AppContext.BaseDirectory, "assets/fonts/Cinzel-SemiBold.ttf")));
 
-    var llmKey = ResolveApiKey(commandLine.LlmApiKey
-                              ?? settings?.Llm?.ApiKey
-                              ?? Environment.GetEnvironmentVariable("SPELLCARDS_LLM_APIKEY"));
+    FontManager.RegisterFont(
+        File.OpenRead(Path.Combine(AppContext.BaseDirectory, "assets/fonts/SourceSerif4-Regular.ttf")));
 
-    if (!string.IsNullOrWhiteSpace(llmEndpoint) && !string.IsNullOrWhiteSpace(llmKey))
+    FontManager.RegisterFont(
+        File.OpenRead(Path.Combine(AppContext.BaseDirectory, "assets/fonts/SourceSerif4-Semibold.ttf")));
+
+    QuestPDF.Settings.License = LicenseType.Community;
+
+    var ct = CancellationToken.None;
+
+    var baseDir = AppContext.BaseDirectory;
+    var reqPath = Path.Combine(baseDir, "requests.txt");
+
+    if (!File.Exists(reqPath))
+        throw new FileNotFoundException("requests.txt not found. Ensure it is copied next to the executable.", reqPath);
+
+    var settingsPath = Path.Combine(baseDir, "settings.json");
+    var settings = SpellCardsSettings.Load(settingsPath);
+
+    var cacheDir = Path.Combine(baseDir, "cache");
+    Directory.CreateDirectory(cacheDir);
+    Directory.CreateDirectory(Path.Combine(baseDir, "out"));
+
+    var (ruleSet, spellNames) = LoadSpellRequests(reqPath);
+
+    using var http = new HttpClient();
+    http.DefaultRequestHeaders.UserAgent.ParseAdd("Dnd35SpellCards/1.0 (personal use)");
+
+    var cache = new HttpCache(http, cacheDir);
+
+    var spells = ruleSet switch
     {
-        try
-        {
-            var condenseCache = new SpellCondensingCache(Path.Combine(cacheDir, "condensed"));
-            llm = new OpenAiCompatibleSpellCondenser(llmModel ?? "gpt-4o-mini", llmEndpoint, llmKey, condenseCache);
-            condenser = llm;
-            Console.WriteLine($"[condense] Using OpenAI-compatible endpoint '{llmEndpoint}' with model '{(llmModel ?? "gpt-4o-mini")}'. Pass --no-condense to disable.");
-        }
-        catch (Exception ex)
-        {
-            Console.WriteLine($"[condense] LLM disabled (falling back): {ex.Message}");
-        }
-    }
+        RuleSet.Dnd5e => await new Open5eSpellSource(cache).FetchSpellsAsync(spellNames, ct),
+        RuleSet.Pf1 => await new PathfinderSpellDbSource(cache).FetchSpellsAsync(spellNames, ct),
+        RuleSet.Pf2 => await new AonPf2SpellSource(cache).FetchSpellsAsync(spellNames, ct),
+        _ => await new D20SrdSpellSource(cache).FetchSpellsAsync(spellNames, ct)
+    };
 
-    if (condenser is NoOpSpellCondenser)
+    ISpellCondenser condenser = new NoOpSpellCondenser();
+    OllamaSpellCondenser? ollama = null;
+    OpenAiCompatibleSpellCondenser? llm = null;
+
+    if (condenseDescriptions)
     {
-        var model = commandLine.Model
-                    ?? settings?.Ollama?.Model
-                    ?? Environment.GetEnvironmentVariable("SPELLCARDS_OLLAMA_MODEL")
-                    ?? "mixtral:8x7b";
-        var endpoint = commandLine.Endpoint
-                       ?? settings?.Ollama?.Endpoint
-                       ?? Environment.GetEnvironmentVariable("SPELLCARDS_OLLAMA_ENDPOINT")
-                       ?? "http://127.0.0.1:11434";
+        var llmModel = commandLine.LlmModel
+                       ?? settings?.Llm?.Model
+                       ?? Environment.GetEnvironmentVariable("SPELLCARDS_LLM_MODEL");
 
-        if (!await OllamaSpellCondenser.IsServiceAvailableAsync(endpoint, ct))
-        {
-            Console.WriteLine($"[condense] Ollama endpoint '{endpoint}' is unreachable. Run ollama serve or provide --no-condense.");
-        }
-        else
+        var llmEndpoint = commandLine.LlmEndpoint
+                          ?? settings?.Llm?.Endpoint
+                          ?? Environment.GetEnvironmentVariable("SPELLCARDS_LLM_ENDPOINT");
+
+        var llmKey = ResolveApiKey(commandLine.LlmApiKey
+                                  ?? settings?.Llm?.ApiKey
+                                  ?? Environment.GetEnvironmentVariable("SPELLCARDS_LLM_APIKEY"));
+
+        if (!string.IsNullOrWhiteSpace(llmEndpoint) && !string.IsNullOrWhiteSpace(llmKey))
         {
             try
             {
                 var condenseCache = new SpellCondensingCache(Path.Combine(cacheDir, "condensed"));
-                ollama = new OllamaSpellCondenser(model, endpoint, condenseCache);
-                condenser = ollama;
-                Console.WriteLine($"[condense] Using Ollama model '{model}' at {endpoint}. Pass --no-condense to disable.");
+                llm = new OpenAiCompatibleSpellCondenser(llmModel ?? "gpt-4o-mini", llmEndpoint, llmKey, condenseCache);
+                condenser = llm;
+                Console.WriteLine($"[condense] Using OpenAI-compatible endpoint '{llmEndpoint}' with model '{(llmModel ?? "gpt-4o-mini")}'. Pass --no-condense to disable.");
             }
             catch (Exception ex)
             {
-                Console.WriteLine($"[condense] Disabled (falling back to raw text): {ex.Message}");
+                Console.WriteLine($"[condense] LLM disabled (falling back): {ex.Message}");
+            }
+        }
+
+        if (condenser is NoOpSpellCondenser)
+        {
+            var model = commandLine.Model
+                        ?? settings?.Ollama?.Model
+                        ?? Environment.GetEnvironmentVariable("SPELLCARDS_OLLAMA_MODEL")
+                        ?? "mixtral:8x7b";
+            var endpoint = commandLine.Endpoint
+                           ?? settings?.Ollama?.Endpoint
+                           ?? Environment.GetEnvironmentVariable("SPELLCARDS_OLLAMA_ENDPOINT")
+                           ?? "http://127.0.0.1:11434";
+
+            if (!await OllamaSpellCondenser.IsServiceAvailableAsync(endpoint, ct))
+            {
+                Console.WriteLine($"[condense] Ollama endpoint '{endpoint}' is unreachable. Run ollama serve or provide --no-condense.");
+            }
+            else
+            {
+                try
+                {
+                    var condenseCache = new SpellCondensingCache(Path.Combine(cacheDir, "condensed"));
+                    ollama = new OllamaSpellCondenser(model, endpoint, condenseCache);
+                    condenser = ollama;
+                    Console.WriteLine($"[condense] Using Ollama model '{model}' at {endpoint}. Pass --no-condense to disable.");
+                }
+                catch (Exception ex)
+                {
+                    Console.WriteLine($"[condense] Disabled (falling back to raw text): {ex.Message}");
+                }
             }
         }
     }
+
+    var finalSpells = await PrepareSpellCardsAsync(spells, condenser, ct);
+
+    llm?.Dispose();
+    ollama?.Dispose();
+
+    var output = Path.Combine(baseDir, "out", "spellcards.pdf");
+    new SpellCardDocument(finalSpells).GeneratePdf(output);
+    
+    Console.WriteLine($"Generated: {output}");
 }
-
-var finalSpells = await PrepareSpellCardsAsync(spells, condenser, ct);
-
-llm?.Dispose();
-ollama?.Dispose();
-
-var output = Path.Combine(baseDir, "out", "spellcards.pdf");
-new SpellCardDocument(finalSpells).GeneratePdf(output);
-
-Console.WriteLine($"Generated: {output}");
+catch (Exception ex)
+{
+    Console.Error.WriteLine("Error: " + ex.Message);
+    Console.Error.WriteLine();
+    Console.Error.WriteLine("Troubleshooting:");
+    Console.Error.WriteLine("- Ensure `requests.txt` is next to the executable.");
+    Console.Error.WriteLine("- Supported rulesets: 3.5, 5e, pf1, pf2 (first line: `ruleset: <value>`).");
+    Console.Error.WriteLine("- Use --no-condense to disable LLM summarization.");
+    Environment.ExitCode = 1;
+}
 
 static async Task<IReadOnlyList<Spell>> PrepareSpellCardsAsync(IReadOnlyList<Spell> spells, ISpellCondenser condenser, CancellationToken ct)
 {
@@ -240,7 +257,9 @@ static bool TryParseRuleSetDirective(string rawLine, out RuleSet ruleSet)
     {
         "3.5" or "3.5e" or "35" or "dnd35" or "dnd3.5" => RuleSet.Dnd35,
         "5e" or "5.0" or "5" or "dnd5" or "dnd5e" or "dnd5.0" => RuleSet.Dnd5e,
-        _ => throw new InvalidOperationException($"Unknown ruleset '{s}'. Supported: 3.5, 5e.")
+        "pf" or "pf1" or "pf1e" or "pathfinder" or "pathfinder1" or "pathfinder1e" => RuleSet.Pf1,
+        "pf2" or "pf2e" or "pathfinder2" or "pathfinder2e" => RuleSet.Pf2,
+        _ => throw new InvalidOperationException($"Unknown ruleset '{s}'. Supported: 3.5, 5e, pf1, pf2.")
     };
 
     return true;
@@ -267,7 +286,9 @@ static string? ResolveApiKey(string? raw)
 internal enum RuleSet
 {
     Dnd35,
-    Dnd5e
+    Dnd5e,
+    Pf1,
+    Pf2
 }
 
 internal sealed record CommandLineOptions(

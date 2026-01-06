@@ -26,11 +26,54 @@ public sealed class Open5eSpellSource
             if (string.IsNullOrWhiteSpace(requested))
                 continue;
 
-            var (chosen, firstUrlUsed) = await FetchSingleAsync(requested, ct).ConfigureAwait(false);
-            result.Add(MapToSpell(chosen, requested, firstUrlUsed));
+            try
+            {
+                var (chosen, firstUrlUsed) = await FetchSingleAsync(requested, ct).ConfigureAwait(false);
+                result.Add(MapToSpell(chosen, requested, firstUrlUsed));
+            }
+            catch (Exception ex)
+            {
+                result.Add(BuildNotFoundSpell(requested, ex.Message));
+            }
         }
 
         return result;
+    }
+
+    private static Spell BuildNotFoundSpell(string requestedName, string reason)
+    {
+        var msg = string.IsNullOrWhiteSpace(reason)
+            ? "Spell was not found. Please check spelling / spell name."
+            : $"Spell was not found. Please check spelling / spell name.\n\nDetails: {reason}";
+
+        return new Spell
+        {
+            Name = string.IsNullOrWhiteSpace(requestedName) ? "(unknown spell)" : requestedName,
+            Part = string.Empty,
+            ClassLevel = "",
+            SchoolText = "",
+            SchoolKey = "",
+            Cast = "",
+            Range = "",
+            TargetOrArea = "",
+            Duration = "",
+            Save = "",
+            Sr = "",
+            Components = "",
+            Tags = "Not Found",
+            Description = msg,
+            Notes = "",
+            SourceUrl = ""
+        };
+    }
+
+    private static bool IsOfficial(Open5eSpellDto spell)
+    {
+        // Open5e aggregates many SRDs. For this tool we only want the official WotC SRD.
+        // Relevant fields from the API: document__slug / document__title.
+        return string.Equals(spell.DocumentSlug, "wotc-srd", StringComparison.OrdinalIgnoreCase)
+               || string.Equals(spell.DocumentTitle, "5e Core Rules", StringComparison.OrdinalIgnoreCase)
+               || string.Equals(spell.DocumentTitle, "Wizards of the Coast SRD", StringComparison.OrdinalIgnoreCase);
     }
 
     private async Task<(Open5eSpellDto Chosen, string FirstUrlUsed)> FetchSingleAsync(string requested, CancellationToken ct)
@@ -39,7 +82,8 @@ public sealed class Open5eSpellSource
         // We still follow "next" if present.
         var firstUrl = SearchEndpoint + Uri.EscapeDataString(requested) + "&page_size=200";
 
-        var allCandidates = new List<Open5eSpellDto>();
+        var allOfficialCandidates = new List<Open5eSpellDto>();
+
         string? url = firstUrl;
         var pages = 0;
 
@@ -57,34 +101,35 @@ public sealed class Open5eSpellSource
 
             var results = response.Results ?? new List<Open5eSpellDto>();
             if (results.Count > 0)
-                allCandidates.AddRange(results);
+                allOfficialCandidates.AddRange(results.Where(IsOfficial));
 
-            // Fast-path: exact match found on this page.
-            var exactOnPage = results
+            // Fast-path: exact match found on this page (official only).
+            var exactOfficialOnPage = results
+                .Where(IsOfficial)
                 .Where(r => !string.IsNullOrWhiteSpace(r.Name) && string.Equals(r.Name, requested, StringComparison.OrdinalIgnoreCase))
                 .ToList();
 
-            if (exactOnPage.Count == 1)
-                return (exactOnPage[0], firstUrl);
+            if (exactOfficialOnPage.Count == 1)
+                return (exactOfficialOnPage[0], firstUrl);
 
-            if (exactOnPage.Count > 1)
+            if (exactOfficialOnPage.Count > 1)
             {
-                var names = string.Join(", ", exactOnPage.Select(x => x.Name).Distinct(StringComparer.OrdinalIgnoreCase).Take(10));
-                throw new InvalidOperationException($"Spell '{requested}' is ambiguous in Open5e. Matches: {names}");
+                var docs = string.Join(", ", exactOfficialOnPage.Select(x => x.DocumentTitle).Where(t => !string.IsNullOrWhiteSpace(t)).Distinct(StringComparer.OrdinalIgnoreCase));
+                throw new InvalidOperationException($"Spell '{requested}' is ambiguous in Open5e official sources. Documents: {docs}");
             }
 
             url = response.Next;
         }
 
-        if (allCandidates.Count == 0)
-            throw new InvalidOperationException($"Spell '{requested}' not found in Open5e.");
+        if (allOfficialCandidates.Count == 0)
+            throw new InvalidOperationException($"Spell '{requested}' not found in Open5e official sources (wotc-srd)." );
 
-        if (allCandidates.Count == 1)
-            return (allCandidates[0], firstUrl);
+        if (allOfficialCandidates.Count == 1)
+            return (allOfficialCandidates[0], firstUrl);
 
-        var names2 = string.Join(", ", allCandidates.Select(x => x.Name).Where(n => !string.IsNullOrWhiteSpace(n))
+        var names = string.Join(", ", allOfficialCandidates.Select(x => x.Name).Where(n => !string.IsNullOrWhiteSpace(n))
             .Distinct(StringComparer.OrdinalIgnoreCase).Take(12));
-        throw new InvalidOperationException($"Spell '{requested}' not found exactly in Open5e. Candidates: {names2}");
+        throw new InvalidOperationException($"Spell '{requested}' not found exactly in Open5e official sources. Candidates: {names}");
     }
 
     private static Spell MapToSpell(Open5eSpellDto s, string requestedName, string searchUrl)
@@ -106,7 +151,6 @@ public sealed class Open5eSpellSource
             description += (description.Length == 0 ? string.Empty : "\n\n") + "At Higher Levels. " + s.HigherLevel.Trim();
 
         var notes = string.IsNullOrWhiteSpace(s.Material) ? string.Empty : $"M: {s.Material.Trim()}";
-
         var classLevel = BuildClassLevel(s);
 
         var schoolText = string.IsNullOrWhiteSpace(s.School) ? string.Empty : s.School.Trim();
@@ -232,6 +276,12 @@ public sealed class Open5eSpellSource
         [JsonPropertyName("dnd_class")]
         public string? DndClass { get; init; }
 
+        [JsonPropertyName("document__slug")]
+        public string? DocumentSlug { get; init; }
+
+        [JsonPropertyName("document__title")]
+        public string? DocumentTitle { get; init; }
+
         [JsonPropertyName("document__url")]
         public string? DocumentUrl { get; init; }
 
@@ -248,6 +298,4 @@ public sealed class Open5eSpellSource
         public string? Type { get; init; }
     }
 }
-
-
 

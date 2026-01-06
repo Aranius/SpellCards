@@ -1,9 +1,9 @@
-Grease
-Disguise Self
-Mirror Image
-Enlarge Person
-Detect Undead
-Undetectable Alignment
-Locate Object
-Fox's Cunning
-Deep Slumber
+ruleset: pf2
+Ancient Dust
+Air Walk
+Bane
+Power Word Stun
+Prismatic Wall
+Solid fog
+Dread Aura
+Perfect Strike

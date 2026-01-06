@@ -2,6 +2,7 @@
 using System.Linq;
 using Dnd35.SpellCards.Infrastructure;
 using Dnd35.SpellCards.Models;
+using Dnd35.SpellCards.Processing;
 using Dnd35.SpellCards.Rendering;
 using QuestPDF.Fluent;
 using QuestPDF.Helpers;
@@ -41,7 +42,9 @@ public sealed class SpellCardComponent : IComponent
                        ComposeMetadata(col);
                        ComposeTags(col, schoolColor);
 
-                       if (!string.IsNullOrWhiteSpace(_spell.Description))
+                       var description = SpellDescriptionFormatter.FormatForCard(_spell.Description);
+
+                       if (!string.IsNullOrWhiteSpace(description))
                        {
                            col.Item()
                               .PaddingVertical(1)
@@ -49,7 +52,7 @@ public sealed class SpellCardComponent : IComponent
                               .LineColor(Colors.Grey.Lighten2);
 
                            col.Item()
-                              .Text(_spell.Description)
+                              .Text(description)
                               .FontSize(7f)
                               .LineHeight(1.05f);
                        }

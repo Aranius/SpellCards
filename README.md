@@ -1,10 +1,11 @@
 ﻿# D&D Spell Cards (MTG size) PDF Generator
 
-Create printable, Magic: The Gathering-sized cards for a list of spells. The tool pulls rules text (3.5 from d20srd.org; 5e from Open5e), optionally condenses it with an LLM (hosted OpenAI-compatible endpoint or local Ollama), and renders a high-resolution PDF via QuestPDF.
+Create printable, Magic: The Gathering-sized cards for a list of spells. The tool pulls rules text (3.5 from d20srd.org; 5e from Open5e; PF1 from PathfinderSpellDb; PF2 from Archives of Nethys), optionally condenses it with an LLM (hosted OpenAI-compatible endpoint or local Ollama), and renders a high-resolution PDF via QuestPDF.
 
 ## Highlights
 - **One-click PDF** - feed it a spell list, get `out/spellcards.pdf` laid out front-to-back.
 - **Smart fetching** - caches HTTP requests locally so repeated runs are instant.
+- **Multiple rulesets** - supports **D&D 3.5**, **D&D 5e**, **Pathfinder 1e**, and **Pathfinder 2e**.
 - **Optional AI summaries** - trims spell text using either:
   - an **OpenAI-compatible** `/v1/chat/completions` endpoint (recommended for hosted LLMs), or
   - a local **Ollama** server.
@@ -45,7 +46,9 @@ Each command drops binaries under `Dnd35.SpellCards/bin/Release/net9.0/<rid>/pub
   - Optional first non-empty line directive to select the ruleset:
     - `ruleset: 3.5` (default)
     - `ruleset: 5e`
-    - Comment-prefixed forms also work, e.g. `# ruleset: 5e`
+    - `ruleset: pf1`
+    - `ruleset: pf2`
+  - Comment-prefixed forms also work, e.g. `# ruleset: pf2`
 - **`settings.json`** - runtime defaults copied beside the executable at publish time:
   ```json
   {
@@ -111,14 +114,15 @@ Usage: SpellCards [options]
 ```
 
 ## Rendering Pipeline
-1. **Fetch** - a spell source pulls spell data (3.5 or 5e), caching responses.
+1. **Fetch** - a spell source pulls spell data, caching responses.
 2. **Condense (optional)** - call an OpenAI-compatible endpoint or Ollama and cache condensed text.
 3. **Split** - `SpellSplitter` divides long descriptions across multiple cards when needed.
 4. **Render** - `SpellCardDocument` builds the PDF using QuestPDF and embedded fonts (`Cinzel`, `Source Serif`).
 
 ## Troubleshooting
 - **`requests.txt not found`** - make sure it sits next to the executable (publish copies it automatically).
+- **Invalid ruleset** - ensure the first line is `ruleset: 3.5`, `ruleset: 5e`, `ruleset: pf1`, or `ruleset: pf2`.
 - **Condensing fails** - the app falls back to raw text automatically. Use `--no-condense` to bypass.
 - **Fonts missing** - keep the `assets/` directory beside the binary; `dotnet publish` already places it correctly.
 
-Icons provided by [game-icons.net](https://game-icons.net) (CC BY 3.0). Spell content (SRD). Use responsibly.
+Icons provided by [game-icons.net](https://game-icons.net) (CC BY 3.0). Spell content (SRD/PRD). Use responsibly.

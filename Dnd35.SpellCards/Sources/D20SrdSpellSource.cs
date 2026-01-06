@@ -22,14 +22,50 @@ public sealed class D20SrdSpellSource
 
         foreach (var name in spellNames)
         {
-            var resolvedName = SpellNameResolver.Resolve(name, nameToUrl);
-            var url = nameToUrl[resolvedName];
+            ct.ThrowIfCancellationRequested();
 
-            var html = await _cache.GetStringCachedAsync(url, ct);
-            var spell = D20SrdSpellParser.ParseSpellPage(html, url);
-            result.Add(spell);
+            try
+            {
+                var resolvedName = SpellNameResolver.Resolve(name, nameToUrl);
+                var url = nameToUrl[resolvedName];
+
+                var html = await _cache.GetStringCachedAsync(url, ct);
+                var spell = D20SrdSpellParser.ParseSpellPage(html, url);
+                result.Add(spell);
+            }
+            catch (Exception ex)
+            {
+                result.Add(BuildNotFoundSpell(name, ex.Message));
+            }
         }
 
         return result;
+    }
+
+    private static Spell BuildNotFoundSpell(string requestedName, string reason)
+    {
+        var msg = string.IsNullOrWhiteSpace(reason)
+            ? "Spell was not found. Please check spelling / spell name."
+            : $"Spell was not found. Please check spelling / spell name.\n\nDetails: {reason}";
+
+        return new Spell
+        {
+            Name = string.IsNullOrWhiteSpace(requestedName) ? "(unknown spell)" : requestedName,
+            Part = string.Empty,
+            ClassLevel = "",
+            SchoolText = "",
+            SchoolKey = "",
+            Cast = "",
+            Range = "",
+            TargetOrArea = "",
+            Duration = "",
+            Save = "",
+            Sr = "",
+            Components = "",
+            Tags = "Not Found",
+            Description = msg,
+            Notes = "",
+            SourceUrl = ""
+        };
     }
 }

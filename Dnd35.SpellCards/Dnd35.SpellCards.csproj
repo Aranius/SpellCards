@@ -9,7 +9,6 @@
 
   <ItemGroup>
     <Folder Include="assets\fonts\" />
-    <Folder Include="Requests\" />
   </ItemGroup>
 
   <ItemGroup>
@@ -27,6 +26,12 @@
 	<ItemGroup>
 		<None Include="assets\fonts\*.ttf" CopyToOutputDirectory="PreserveNewest" />
 		<None Include="assets\icons\*.svg" CopyToOutputDirectory="PreserveNewest" />
+	</ItemGroup>
+
+	<ItemGroup>
+	  <Compile Remove="Requests\**" />
+	  <EmbeddedResource Remove="Requests\**" />
+	  <None Remove="Requests\**" />
 	</ItemGroup>
 
 
