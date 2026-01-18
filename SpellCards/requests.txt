@@ -1,9 +1,7 @@
-ruleset: pf2
-Ancient Dust
-Air Walk
-Bane
-Power Word Stun
-Prismatic Wall
-Solid fog
-Dread Aura
-Perfect Strike
+ruleset: 3.5
+Detect Secret Doors
+Feather Fall
+Glitterdust
+Hold Person
+Scorching Ray
+Acid Arrow

@@ -123,7 +123,8 @@ try
     llm?.Dispose();
     ollama?.Dispose();
 
-    var output = Path.Combine(baseDir, "out", "spellcards.pdf");
+    var timestamp = DateTime.Now.ToString("yyyyMMdd_HHmmss");
+    var output = Path.Combine(baseDir, "out", $"spellcards_{timestamp}.pdf");
     new SpellCardDocument(finalSpells).GeneratePdf(output);
     
     Console.WriteLine($"Generated: {output}");
