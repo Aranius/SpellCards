@@ -1,11 +1,12 @@
 ﻿# D&D & Pathfinder Spell Cards (MTG size) PDF Generator
 
-Create printable, Magic: The Gathering-sized cards for a list of spells. The tool pulls rules text (3.5 from d20srd.org; 5e from Open5e; PF1 from PathfinderSpellDb; PF2 from Archives of Nethys), optionally condenses it with an LLM (hosted OpenAI-compatible endpoint or local Ollama), and renders a high-resolution PDF via QuestPDF.
+Create printable, Magic: The Gathering-sized cards for a list of spells. The tool pulls rules text (3.5 from d20srd.org; 5e/5.5 from Open5e v2; PF1 from PathfinderSpellDb; PF2 from Archives of Nethys), optionally condenses it with an LLM (hosted OpenAI-compatible endpoint or local Ollama), and renders a high-resolution PDF via QuestPDF.
 
 ## Highlights
-- **One-click PDF** - feed it a spell list, get `out/spellcards.pdf` laid out front-to-back.
+- **One-click PDF** - feed it a spell list, get a timestamped file such as `out/spellcards_20260419_174826.pdf` laid out front-to-back.
 - **Smart fetching** - caches HTTP requests locally so repeated runs are instant.
-- **Multiple rulesets** - supports **D&D 3.5**, **D&D 5e**, **Pathfinder 1e**, and **Pathfinder 2e**.
+- **Multiple rulesets** - supports **D&D 3.5**, **D&D 5e (2014)**, **D&D 5.5 / 2024**, **Pathfinder 1e**, and **Pathfinder 2e**.
+- **Custom spell overrides** - define your own spells in `custom-spells.json`; local custom entries win over remote sources.
 - **Optional AI summaries** - trims spell text using either:
   - an **OpenAI-compatible** `/v1/chat/completions` endpoint (recommended for hosted LLMs), or
   - a local **Ollama** server.
@@ -16,10 +17,11 @@ Create printable, Magic: The Gathering-sized cards for a list of spells. The too
 1. Grab the latest release zip for your platform (Windows, Linux, macOS) from the GitHub Releases page.
 2. Extract the archive somewhere writable (it creates `cache/` and `out/`).
 3. Edit `requests.txt` (one spell per line; `#` comments allowed).
-4. Launch the binary:
+4. Optionally edit `custom-spells.json` to add homebrew/local spells.
+5. Launch the binary:
    - **Windows**: `SpellCards.exe`
    - **Linux/macOS**: `./SpellCards`
-5. The generated PDF lives under `out/spellcards.pdf`.
+6. The generated PDF lives under `out/` and uses a timestamped filename so an already-open PDF does not block a new export.
 
 ### Build from source
 ```bash
@@ -27,14 +29,60 @@ dotnet restore
 dotnet run --project SpellCards
 ```
 
+### Publishing your own zips
+Produce trimmed, platform-specific bundles ready for upload:
+```bash
+# Windows x64
+dotnet publish SpellCards -c Release -r win-x64 --self-contained false -p:PublishTrimmed=true
+
+# Linux x64
+dotnet publish SpellCards -c Release -r linux-x64 --self-contained false -p:PublishTrimmed=true
+
+# macOS (Apple Silicon)
+dotnet publish SpellCards -c Release -r osx-arm64 --self-contained false -p:PublishTrimmed=true
+```
+Each command drops binaries under `SpellCards/bin/Release/net9.0/<rid>/publish/`. Zip that folder (it contains `requests.txt`, `custom-spells.json`, `settings.json`, fonts, etc.) and attach it to a GitHub release.
+
+For the full packaging/checksum/tagging checklist, see `docs/release.md`.
+
+If you use GitHub Releases, `.github/workflows/release.yml` can build these packages automatically for `v*` tags.
+
 ## Configuration Files
 - **`requests.txt`** - spell names to render. Duplicate names are ignored.
   - Optional first non-empty line directive to select the ruleset:
     - `ruleset: 3.5` (default)
-    - `ruleset: 5e`
+    - `ruleset: 5e` (D&D 2014 / Open5e `srd-2014`)
+    - `ruleset: 5.5` (D&D 2024 / Open5e `srd-2024`)
     - `ruleset: pf1`
     - `ruleset: pf2`
   - Comment-prefixed forms also work, e.g. `# ruleset: pf2`
+- **`custom-spells.json`** - optional local spell definitions.
+  - Matching is case-insensitive and uses the same fuzzy resolver as remote sources.
+  - Custom spells take precedence over downloaded spells.
+  - `ruleSet` may be omitted for an all-ruleset spell, or set to values such as `3.5`, `5e`, `5.5`, `pf1`, `pf2`, `any`, or `all`.
+  - Example:
+  ```json
+  [
+    {
+      "ruleSet": "5e",
+      "name": "Blessing of Unicorn",
+      "classLevel": "Bard 2",
+      "schoolText": "Transmutation",
+      "schoolKey": "transmutation",
+      "cast": "1 action",
+      "range": "Touch",
+      "targetOrArea": "Target: 1 willing creature",
+      "duration": "1 minute",
+      "save": "None",
+      "sr": "No",
+      "components": "V S M",
+      "tags": "Custom · Sparkly",
+      "description": "A shimmering unicorn horn grows from the target's forehead for the duration...",
+      "notes": "M: a pinch of glitter and one heroic neigh",
+      "sourceUrl": "custom-spells.json"
+    }
+  ]
+  ```
 - **`settings.json`** - runtime defaults copied beside the executable at publish time:
   ```json
   {
@@ -52,6 +100,13 @@ dotnet run --project SpellCards
   - `llm.endpoint` is a base URL for an **OpenAI-compatible** API (the app calls `v1/chat/completions`).
   - `llm.apiKey` can be a literal key or `env:NAME` to read from an environment variable.
 - **`cache/`** - HTTP downloads and condensed spell text. Delete `cache/condensed` when switching LLM providers/models so summaries regenerate.
+
+## Ruleset Notes
+- **`3.5`** - fetched from d20srd.org
+- **`5e`** - fetched from Open5e v2, filtered to document `srd-2014` (System Reference Document 5.1)
+- **`5.5`** - fetched from Open5e v2, filtered to document `srd-2024` (System Reference Document 5.2)
+- **`pf1`** - fetched from PathfinderSpellDb
+- **`pf2`** - fetched from Archives of Nethys
 
 ## Controlling the LLM Summaries
 Condensing is optional. If enabled, the selection order is:
@@ -100,14 +155,15 @@ Usage: SpellCards [options]
 ```
 
 ## Rendering Pipeline
-1. **Fetch** - a spell source pulls spell data, caching responses.
+1. **Fetch** - local custom spells are resolved first, then a remote spell source pulls the remaining spell data and caches responses.
 2. **Condense (optional)** - call an OpenAI-compatible endpoint or Ollama and cache condensed text.
 3. **Split** - `SpellSplitter` divides long descriptions across multiple cards when needed.
 4. **Render** - `SpellCardDocument` builds the PDF using QuestPDF and embedded fonts (`Cinzel`, `Source Serif`).
 
 ## Troubleshooting
 - **`requests.txt not found`** - make sure it sits next to the executable (publish copies it automatically).
-- **Invalid ruleset** - ensure the first line is `ruleset: 3.5`, `ruleset: 5e`, `ruleset: pf1`, or `ruleset: pf2`.
+- **Invalid ruleset** - ensure the first line is `ruleset: 3.5`, `ruleset: 5e`, `ruleset: 5.5`, `ruleset: pf1`, or `ruleset: pf2`.
+- **Custom spell not picked up** - verify `custom-spells.json` is next to the executable and that `ruleSet` matches the active ruleset.
 - **Condensing fails** - the app falls back to raw text automatically. Use `--no-condense` to bypass.
 - **Fonts missing** - keep the `assets/` directory beside the binary; `dotnet publish` already places it correctly.
 

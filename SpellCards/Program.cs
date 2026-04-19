@@ -39,19 +39,34 @@ try
     Directory.CreateDirectory(Path.Combine(baseDir, "out"));
 
     var (ruleSet, spellNames) = LoadSpellRequests(reqPath);
+    var customSpellsPath = Path.Combine(baseDir, "custom-spells.json");
 
     using var http = new HttpClient();
     http.DefaultRequestHeaders.UserAgent.ParseAdd("Dnd35SpellCards/1.0 (personal use)");
 
     var cache = new HttpCache(http, cacheDir);
 
-    var spells = ruleSet switch
+    var customSpells = new CustomSpellSource(customSpellsPath).Resolve(ruleSet, spellNames);
+    var remainingSpellNames = spellNames
+        .Where(name => !customSpells.ContainsKey(name))
+        .ToList();
+
+    var fetchedSpells = ruleSet switch
     {
-        RuleSet.Dnd5e => await new Open5eSpellSource(cache).FetchSpellsAsync(spellNames, ct),
-        RuleSet.Pf1 => await new PathfinderSpellDbSource(cache).FetchSpellsAsync(spellNames, ct),
-        RuleSet.Pf2 => await new AonPf2SpellSource(cache).FetchSpellsAsync(spellNames, ct),
-        _ => await new D20SrdSpellSource(cache).FetchSpellsAsync(spellNames, ct)
+        RuleSet.Dnd5e => await new Open5eSpellSource(cache, "srd-2014", "5e").FetchSpellsAsync(remainingSpellNames, ct),
+        RuleSet.Dnd55 => await new Open5eSpellSource(cache, "srd-2024", "5.5").FetchSpellsAsync(remainingSpellNames, ct),
+        RuleSet.Pf1 => await new PathfinderSpellDbSource(cache).FetchSpellsAsync(remainingSpellNames, ct),
+        RuleSet.Pf2 => await new AonPf2SpellSource(cache).FetchSpellsAsync(remainingSpellNames, ct),
+        _ => await new D20SrdSpellSource(cache).FetchSpellsAsync(remainingSpellNames, ct)
     };
+
+    var fetchedByRequest = remainingSpellNames
+        .Zip(fetchedSpells, (requestedName, spell) => new { requestedName, spell })
+        .ToDictionary(x => x.requestedName, x => x.spell, StringComparer.OrdinalIgnoreCase);
+
+    var spells = spellNames
+        .Select(name => customSpells.TryGetValue(name, out var customSpell) ? customSpell : fetchedByRequest[name])
+        .ToList();
 
     ISpellCondenser condenser = new NoOpSpellCondenser();
     OllamaSpellCondenser? ollama = null;
@@ -135,7 +150,7 @@ catch (Exception ex)
     Console.Error.WriteLine();
     Console.Error.WriteLine("Troubleshooting:");
     Console.Error.WriteLine("- Ensure `requests.txt` is next to the executable.");
-    Console.Error.WriteLine("- Supported rulesets: 3.5, 5e, pf1, pf2 (first line: `ruleset: <value>`).");
+    Console.Error.WriteLine("- Supported rulesets: 3.5, 5e, 5.5, pf1, pf2 (first line: `ruleset: <value>`).");
     Console.Error.WriteLine("- Use --no-condense to disable LLM summarization.");
     Environment.ExitCode = 1;
 }
@@ -258,9 +273,10 @@ static bool TryParseRuleSetDirective(string rawLine, out RuleSet ruleSet)
     {
         "3.5" or "3.5e" or "35" or "dnd35" or "dnd3.5" => RuleSet.Dnd35,
         "5e" or "5.0" or "5" or "dnd5" or "dnd5e" or "dnd5.0" => RuleSet.Dnd5e,
+        "5.5" or "5.5e" or "55" or "dnd55" or "dnd5.5" or "dnd2024" or "2024" or "5e2024" => RuleSet.Dnd55,
         "pf" or "pf1" or "pf1e" or "pathfinder" or "pathfinder1" or "pathfinder1e" => RuleSet.Pf1,
         "pf2" or "pf2e" or "pathfinder2" or "pathfinder2e" => RuleSet.Pf2,
-        _ => throw new InvalidOperationException($"Unknown ruleset '{s}'. Supported: 3.5, 5e, pf1, pf2.")
+        _ => throw new InvalidOperationException($"Unknown ruleset '{s}'. Supported: 3.5, 5e, 5.5, pf1, pf2.")
     };
 
     return true;
@@ -288,6 +304,7 @@ internal enum RuleSet
 {
     Dnd35,
     Dnd5e,
+    Dnd55,
     Pf1,
     Pf2
 }

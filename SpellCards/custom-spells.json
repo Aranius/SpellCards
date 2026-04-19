@@ -1,0 +1,38 @@
+[
+  {
+    "ruleSet": "5e",
+    "name": "Blessing of Unicorn",
+    "classLevel": "Bard 2",
+    "schoolText": "Transmutation",
+    "schoolKey": "transmutation",
+    "cast": "1 action",
+    "range": "Touch",
+    "targetOrArea": "Target: 1 willing creature",
+    "duration": "1 minute",
+    "save": "None",
+    "sr": "No",
+    "components": "V S M",
+    "tags": "Custom - Sparkly",
+    "description": "A shimmering unicorn horn grows from the target's forehead for the duration. The target gains advantage on Charisma (Performance) checks, sheds rainbow light in a 10-foot radius, and can use a bonus action to dramatically puke a harmless rainbow in a 15-foot cone. Creatures in the cone must succeed on a Wisdom save against your spell save DC or spend their next turn applauding the spectacle.",
+    "notes": "M: a pinch of glitter and one heroic neigh",
+    "sourceUrl": "custom-spells.json"
+  },
+  {
+    "ruleSet": "3.5",
+    "name": "Emergency Summon: Tiny Lawyer",
+    "classLevel": "Wizard 1",
+    "schoolText": "Conjuration",
+    "schoolKey": "conjuration",
+    "cast": "1 standard action",
+    "range": "Close",
+    "targetOrArea": "Effect: one summoned Tiny outsider",
+    "duration": "1 round/level",
+    "save": "None",
+    "sr": "No",
+    "components": "V S",
+    "tags": "Custom - Silly",
+    "description": "You conjure a Tiny extraplanar lawyer carrying a briefcase and an unnecessary quantity of paperwork. Once per round as a free action, the lawyer may object loudly to one creature within 30 feet, imposing a -1 penalty on that creature's next attack roll, saving throw, or skill check before the start of your next turn. The lawyer has no offensive abilities, but it is immune to nonmagical intimidation.",
+    "notes": "The lawyer speaks Common, Celestial, and Passive-Aggressive.",
+    "sourceUrl": "custom-spells.json"
+  }
+]

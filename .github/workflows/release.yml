@@ -1,0 +1,94 @@
+name: Release Packages
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  package:
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup .NET 9
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 9.0.x
+
+      - name: Restore
+        run: dotnet restore SpellCards.sln
+
+      - name: Build
+        run: dotnet build SpellCards.sln --configuration Release --no-restore
+
+      - name: Test
+        run: dotnet test SpellCards.sln --configuration Release --no-build --verbosity normal
+
+      - name: Publish release packages
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+
+          $targets = @(
+            @{ Rid = 'win-x64'; Mode = 'framework'; SelfContained = 'false' },
+            @{ Rid = 'win-x64'; Mode = 'selfcontained'; SelfContained = 'true' },
+            @{ Rid = 'linux-x64'; Mode = 'framework'; SelfContained = 'false' },
+            @{ Rid = 'linux-x64'; Mode = 'selfcontained'; SelfContained = 'true' },
+            @{ Rid = 'osx-x64'; Mode = 'framework'; SelfContained = 'false' },
+            @{ Rid = 'osx-x64'; Mode = 'selfcontained'; SelfContained = 'true' }
+          )
+
+          foreach ($target in $targets) {
+            $outDir = "artifacts/publish/$($target.Rid)/$($target.Mode)"
+            dotnet publish SpellCards/SpellCards.csproj -c Release -r $target.Rid -o $outDir --self-contained $target.SelfContained
+            if ($LASTEXITCODE -ne 0) {
+              throw "Publish failed for $($target.Rid)/$($target.Mode)"
+            }
+          }
+
+      - name: Zip release packages
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+
+          $archives = @(
+            @{ Source = 'artifacts/publish/win-x64/framework/*'; Destination = 'artifacts/publish/win-x64-framework.zip' },
+            @{ Source = 'artifacts/publish/win-x64/selfcontained/*'; Destination = 'artifacts/publish/win-x64-selfcontained.zip' },
+            @{ Source = 'artifacts/publish/linux-x64/framework/*'; Destination = 'artifacts/publish/linux-x64-framework.zip' },
+            @{ Source = 'artifacts/publish/linux-x64/selfcontained/*'; Destination = 'artifacts/publish/linux-x64-selfcontained.zip' },
+            @{ Source = 'artifacts/publish/osx-x64/framework/*'; Destination = 'artifacts/publish/osx-x64-framework.zip' },
+            @{ Source = 'artifacts/publish/osx-x64/selfcontained/*'; Destination = 'artifacts/publish/osx-x64-selfcontained.zip' }
+          )
+
+          foreach ($archive in $archives) {
+            Compress-Archive -Path $archive.Source -DestinationPath $archive.Destination -Force
+          }
+
+      - name: Generate SHA-256 checksum files
+        shell: pwsh
+        run: powershell -NoProfile -ExecutionPolicy Bypass -File artifacts/publish/write-sha256sum.ps1
+
+      - name: Upload release artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: spellcards-release-packages
+          path: |
+            artifacts/publish/*.zip
+            artifacts/publish/*.sha256sum
+          if-no-files-found: error
+
+      - name: Publish GitHub release assets
+        if: startsWith(github.ref, 'refs/tags/v')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            artifacts/publish/*.zip
+            artifacts/publish/*.sha256sum
+          generate_release_notes: true
