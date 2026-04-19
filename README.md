@@ -29,24 +29,6 @@ dotnet restore
 dotnet run --project SpellCards
 ```
 
-### Publishing your own zips
-Produce trimmed, platform-specific bundles ready for upload:
-```bash
-# Windows x64
-dotnet publish SpellCards -c Release -r win-x64 --self-contained false -p:PublishTrimmed=true
-
-# Linux x64
-dotnet publish SpellCards -c Release -r linux-x64 --self-contained false -p:PublishTrimmed=true
-
-# macOS (Apple Silicon)
-dotnet publish SpellCards -c Release -r osx-arm64 --self-contained false -p:PublishTrimmed=true
-```
-Each command drops binaries under `SpellCards/bin/Release/net9.0/<rid>/publish/`. Zip that folder (it contains `requests.txt`, `custom-spells.json`, `settings.json`, fonts, etc.) and attach it to a GitHub release.
-
-For the full packaging/checksum/tagging checklist, see `docs/release.md`.
-
-If you use GitHub Releases, `.github/workflows/release.yml` can build these packages automatically for `v*` tags.
-
 ## Configuration Files
 - **`requests.txt`** - spell names to render. Duplicate names are ignored.
   - Optional first non-empty line directive to select the ruleset:
